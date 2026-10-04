@@ -1,0 +1,10 @@
+/target
+
+# Local SQLite database (DATABASE_PATH default is data/app.db), plus the
+# WAL/SHM files SQLite keeps beside it.
+/data
+*.db
+*.db-wal
+*.db-shm
+
+.DS_Store

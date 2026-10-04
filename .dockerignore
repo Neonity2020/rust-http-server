@@ -1,0 +1,14 @@
+target/
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+README.md
+
+# A local database would only bloat the build context (and leak test accounts
+# to the daemon); the image builds its own under /data.
+data/
+*.db
+*.db-wal
+*.db-shm

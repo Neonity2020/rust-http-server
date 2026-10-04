@@ -1,0 +1,33 @@
+[package]
+name = "http-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+axum = "0.8.9"
+# CookieJar for the session cookie.
+axum-extra = { version = "0.12", features = ["cookie"] }
+# Argon2id password hashing.
+argon2 = "0.6"
+# Session tokens come straight from the OS CSPRNG.
+getrandom = "0.4"
+hex = "0.4"
+# SQLite. `bundled` compiles the C library from source, so the image needs no
+# system libsqlite3.
+rusqlite = { version = "0.40", features = ["bundled"] }
+# Only the SHA-256 of a session token is stored, so a leaked database file
+# cannot be replayed as a set of valid cookies.
+sha2 = "0.11"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# `cookie` 0.18 measures Max-Age with `time::Duration`, not `std::time::Duration`.
+# Already in the tree through axum-extra; listed so the session cookie can set a TTL.
+time = "0.3"
+tokio = { version = "1.53.2", features = ["full"] }
+tower-http = { version = "0.7.1", features = ["trace", "timeout", "cors"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+http-body-util = "0.1.5"
+tower = { version = "0.5.3", features = ["util"] }

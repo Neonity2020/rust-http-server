@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>http-server 测试台</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --panel-2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --blue: #58a6ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  .spacer { flex: 1; }
+  input, button, textarea {
+    font-family: inherit;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+  }
+  input:focus, textarea:focus, button:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 1px;
+  }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--muted); background: #232a33; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+  button.primary:hover:not(:disabled) { background: #2b7cf3; border-color: #2b7cf3; }
+
+  .badge {
+    font-size: 12px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .badge.up { color: var(--green); border-color: #1f6f33; background: rgba(63,185,80,.1); }
+  .badge.down { color: var(--red); border-color: #6e2b28; background: rgba(248,81,73,.1); }
+
+  .summary { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+  .summary .n-pass { color: var(--green); font-weight: 600; }
+  .summary .n-fail { color: var(--red); font-weight: 600; }
+
+  main { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr); gap: 16px; padding: 16px 20px 40px; align-items: start; }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+
+  section { border: 1px solid var(--border); border-radius: 8px; background: var(--panel); overflow: hidden; }
+  section > h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    color: var(--muted);
+    margin: 0;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .controls { padding: 12px 14px; border-bottom: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .controls label { color: var(--muted); font-size: 12px; }
+
+  /* The heading is uppercased; a username inside it must not be. */
+  section > h2 .desc { text-transform: none; }
+  ul.tests { list-style: none; margin: 0; padding: 0; }
+  li.test { border-bottom: 1px solid var(--border); }
+  li.test:last-child { border-bottom: 0; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; }
+  .verb {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    width: 54px;
+    flex: none;
+    text-align: center;
+    padding: 2px 0;
+    border-radius: 4px;
+    border: 1px solid transparent;
+  }
+  .v-GET { color: var(--blue); border-color: #1f4c7a; background: rgba(88,166,255,.08); }
+  .v-POST { color: var(--green); border-color: #1f6f33; background: rgba(63,185,80,.08); }
+  .v-DELETE { color: var(--red); border-color: #6e2b28; background: rgba(248,81,73,.08); }
+  .path { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; flex: 1; }
+  .path .arg { color: var(--yellow); }
+  .desc { color: var(--muted); font-size: 12px; }
+  .row-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+  .verdict {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    width: 34px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .verdict.pass { color: var(--green); }
+  .verdict.fail { color: var(--red); }
+  .verdict.pending { color: var(--muted); font-weight: 400; }
+  .run { padding: 4px 10px; font-size: 12px; }
+
+  .detail { padding: 0 14px 12px 14px; }
+  .detail pre {
+    margin: 0;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 12px;
+    overflow: auto;
+    max-height: 260px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 6px; font-family: var(--mono); }
+
+  pre.out { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; max-height: 62vh; overflow: auto; }
+  .empty { color: var(--muted); padding: 14px; font-size: 13px; }
+  textarea { width: 100%; font-family: var(--mono); resize: vertical; min-height: 64px; }
+  .inline-input { width: 90px; padding: 3px 7px; font-family: var(--mono); font-size: 12px; }
+  #username { width: 130px; padding: 3px 7px; font-family: var(--mono); font-size: 12px; }
+  #password { width: 150px; padding: 3px 7px; font-family: var(--mono); font-size: 12px; }
+  .auth-note { padding: 10px 14px; border-top: 1px solid var(--border); color: var(--muted); font-size: 12px; }
+  .hint { color: var(--muted); font-size: 12px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  .note { margin: 0; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>http-server 测试台</h1>
+  <input id="base" size="28" title="服务地址" spellcheck="false">
+  <span id="conn" class="badge">未连接</span>
+  <span id="session" class="badge">未登录</span>
+  <span class="spacer"></span>
+  <span class="summary">
+    <span class="n-pass" id="pass">0</span> 通过
+    <span class="n-fail" id="fail">0</span> 失败
+  </span>
+  <button class="primary" id="run-all">运行全部</button>
+  <button id="reset">清空</button>
+</header>
+
+<main>
+  <section>
+    <h2>账号 <span class="spacer"></span> <span id="who" class="desc"></span></h2>
+    <div class="controls">
+      <label for="username">用户名</label>
+      <input id="username" value="demo" spellcheck="false">
+      <label for="password">密码</label>
+      <input id="password" type="password" value="demo-password" spellcheck="false">
+      <button id="do-register">注册</button>
+      <button id="do-login">登录</button>
+      <button id="do-logout">退出</button>
+    </div>
+    <p class="auth-note">
+      登录成功后会拿到一个 <code>HttpOnly</code> 的 session Cookie，浏览器自动带上，
+      下面标「需登录」的用例就能跑通了。这几个按钮和下面的「运行全部」是等价的，
+      只是手动触发。
+    </p>
+  </section>
+
+  <section>
+    <h2>接口用例 <span class="spacer"></span> <span id="progress" class="desc"></span></h2>
+    <div class="controls">
+      <label for="hello-name">name</label>
+      <input id="hello-name" class="inline-input" value="rust" spellcheck="false">
+      <label for="slow-ms">慢请求 ms</label>
+      <input id="slow-ms" class="inline-input" value="500" spellcheck="false">
+    </div>
+    <ul class="tests" id="tests"></ul>
+    <div class="hint">
+      「运行全部」按从上到下的顺序执行，用例之间是有状态的：先验证未登录被拒，
+      再注册、登录，之后受保护的接口才可用；最后退出登录。单独点某个用例会脱离这个顺序。
+    </div>
+  </section>
+
+  <section>
+    <h2>响应详情</h2>
+    <div class="controls">
+      <button id="copy-curl">复制为 curl</button>
+      <span class="desc" id="which">选择左侧任意用例查看</span>
+    </div>
+    <div id="out"><div class="empty">还没有响应。点「运行全部」或单独运行某个用例。</div></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+
+const $ = (sel) => document.querySelector(sel);
+const base = $("#base");
+
+// Same-origin by default, so the page also works when served by the server itself.
+base.value = location.origin;
+
+// The by-id and delete cases must target rows that actually exist, and they
+// cannot know an id up front: ids depend on what previous runs left behind.
+// So the list case captures a real id, the create case captures the new one,
+// and only the deliberately-nonexistent cases hardcode an id.
+let lastCreatedId = null;
+let lastListedId = null;
+let lastRequest = null;
+
+// Nothing will reach this in any realistic amount of use, and picking it high
+// keeps the 404 cases from accidentally hitting a row after thousands of inserts.
+const MISSING_ID = 999999;
+
+// "same-origin" is what lets the browser store the session cookie the login
+// call sets and send it back on every later request. A cross-origin target in
+// the address bar will not get the cookie — that needs credentialed CORS.
+const CREDENTIALS = "same-origin";
+
+// A fresh name per run, so the register case can expect 201 every time instead
+// of colliding with the account the previous run left behind.
+const freshUsername = () => `tester-${Date.now().toString(36)}`;
+
+// `path`/`body` are functions so inputs are read at run time, not at definition time.
+const TESTS = [
+  { label: "健康检查", method: "GET", path: () => "/health", expect: 200,
+    desc: "Docker HEALTHCHECK 用的就是这个" },
+  { label: "问候语", method: "GET", path: () => `/api/hello/${encodeURIComponent($("#hello-name").value || "rust")}`, expect: 200,
+    desc: "路径参数" },
+  { label: "问候语（大写）", method: "GET", path: () => `/api/hello/${encodeURIComponent($("#hello-name").value || "rust")}?loud=true`, expect: 200,
+    desc: "查询参数 ?loud=true" },
+  { label: "回显 JSON", method: "POST", path: () => "/api/echo", expect: 200,
+    body: () => JSON.stringify({ hello: "world", n: 42, nested: { ok: true } }),
+    desc: "原样回显请求体" },
+
+  { label: "未登录访问条目", method: "GET", path: () => "/api/items", expect: 401,
+    desc: "受保护接口，匿名应被拒", setsSession: "out" },
+  { label: "注册新用户", method: "POST", path: () => "/api/auth/register", expect: 201,
+    body: () => JSON.stringify({ username: freshUsername(), password: "tester-password" }),
+    desc: "用户名每次都换，避开 409", capture: "user" },
+  { label: "登录", method: "POST", path: () => "/api/auth/login", expect: 200,
+    body: () => JSON.stringify({ username: testUsername(), password: "tester-password" }),
+    desc: "返回 Set-Cookie，浏览器自动存下", setsSession: "in" },
+  { label: "查询当前用户", method: "GET", path: () => "/api/auth/me", expect: 200,
+    desc: "拿 Cookie 换当前账号" },
+  { label: "密码错误", method: "POST", path: () => "/api/auth/login", expect: 401,
+    body: () => JSON.stringify({ username: testUsername(), password: "wrong-password" }),
+    desc: "用户名或密码不对，错误信息不区分是哪一样错了" },
+
+  { label: "列出条目", method: "GET", path: () => "/api/items", expect: 200,
+    desc: "同一个接口，登录后就能读了", capture: "firstItem" },
+  { label: "按 id 查询", method: "GET", path: () => `/api/items/${lastListedId ?? 1}`, expect: 200,
+    desc: "列表里真实存在的 id，不是写死的" },
+  { label: "按 id 查询（不存在）", method: "GET", path: () => `/api/items/${MISSING_ID}`, expect: 404,
+    desc: "不存在的 id 返回 404" },
+  { label: "新建条目", method: "POST", path: () => "/api/items", expect: 201,
+    body: () => JSON.stringify({ name: `from-test-${Date.now() % 100000}` }),
+    desc: "返回 201 与新 id", capture: "createdItem" },
+  { label: "删除条目", method: "DELETE", path: () => `/api/items/${lastCreatedId ?? lastListedId ?? 1}`, expect: 204,
+    desc: "删掉本轮刚建的那条，所以重复运行不会越删越少" },
+  { label: "删除条目（不存在）", method: "DELETE", path: () => `/api/items/${MISSING_ID}`, expect: 404,
+    desc: "不存在的 id 返回 404" },
+
+  { label: "退出登录", method: "POST", path: () => "/api/auth/logout", expect: 204,
+    desc: "服务端删掉这条会话", setsSession: "out" },
+  { label: "退出后访问条目", method: "GET", path: () => "/api/items", expect: 401,
+    desc: "旧 Cookie 已经作废" },
+
+  { label: "慢请求", method: "GET", path: () => `/api/slow?ms=${Number($("#slow-ms").value) || 500}`, expect: 200,
+    desc: "服务端睡眠指定毫秒" },
+];
+
+// The register case picks its own name; the cases after it have to reuse that
+// same one, so it is stashed here rather than in the username box.
+let registered = null;
+const testUsername = () => registered ?? freshUsername();
+
+const nodes = [];
+
+function render() {
+  const ul = $("#tests");
+  ul.textContent = "";
+  nodes.length = 0;
+
+  TESTS.forEach((test, i) => {
+    const li = document.createElement("li");
+    li.className = "test";
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const verb = document.createElement("span");
+    verb.className = "verb v-" + test.method;
+    verb.textContent = test.method;
+
+    const mid = document.createElement("div");
+    mid.className = "path";
+    const p = document.createElement("div");
+    p.textContent = test.path();
+    const d = document.createElement("div");
+    d.className = "desc";
+    d.textContent = test.desc || "";
+    mid.append(p, d);
+
+    const verdict = document.createElement("span");
+    verdict.className = "verdict pending";
+    verdict.textContent = "—";
+
+    const btn = document.createElement("button");
+    btn.className = "run";
+    btn.textContent = "运行";
+    btn.addEventListener("click", () => runOne(i));
+
+    const actions = document.createElement("div");
+    actions.className = "row-actions";
+    actions.append(verdict, btn);
+    row.append(verb, mid, actions);
+
+    const detail = document.createElement("div");
+    detail.className = "detail";
+    detail.hidden = true;
+
+    li.append(row, detail);
+    ul.append(li);
+    nodes.push({ btn, verdict, detail, pathEl: p });
+  });
+}
+
+async function send(method, path, body) {
+  const url = base.value.replace(/\/+$/, "") + path;
+  const init = { method, headers: {}, credentials: CREDENTIALS };
+  if (body !== undefined) {
+    init.headers["content-type"] = "application/json";
+    init.body = body;
+  }
+  lastRequest = { method, path, body };
+
+  const t0 = performance.now();
+  const res = await fetch(url, init);
+  const ms = performance.now() - t0;
+  const text = await res.text();
+  return { url, status: res.status, ms, text, res };
+}
+
+async function runOne(i) {
+  const test = TESTS[i];
+  const node = nodes[i];
+  node.btn.disabled = true;
+  node.verdict.className = "verdict pending";
+  node.verdict.textContent = "…";
+  node.detail.hidden = true;
+
+  const path = test.path();
+  const body = test.body ? test.body() : undefined;
+
+  // The DELETE case targets whatever the POST case created, so the label on
+  // screen has to follow the path actually requested.
+  node.pathEl.textContent = path;
+
+  try {
+    const r = await send(test.method, path, body);
+    const ok = r.status === test.expect;
+
+    node.verdict.className = "verdict " + (ok ? "pass" : "fail");
+    node.verdict.textContent = r.status;
+
+    applyOutcome(test, r, ok);
+    showDetail(node, test, r);
+    showResponse(test, r, ok);
+    recount();
+    return ok;
+  } catch (err) {
+    node.verdict.className = "verdict fail";
+    node.verdict.textContent = "ERR";
+    node.detail.hidden = false;
+    node.detail.textContent = "请求失败：" + err.message;
+    showResponse(test, { url: base.value + path, status: 0, ms: 0, text: String(err) }, false);
+    recount();
+    return false;
+  } finally {
+    node.btn.disabled = false;
+  }
+}
+
+// Keeps the page's idea of "am I logged in", the username each case used and
+// the ids the by-id cases target in sync with what the server just said.
+function applyOutcome(test, r, ok) {
+  if (test.setsSession) {
+    setSessionBadge(test.setsSession === "in");
+  }
+  if (!ok || !test.capture) return;
+
+  let payload = null;
+  try { payload = JSON.parse(r.text); } catch { return; }
+
+  if (test.capture === "user") {
+    const name = payload?.user?.username;
+    if (!name) return;
+    registered = name;
+    $("#username").value = name;
+    $("#password").value = "tester-password";
+    showWho(payload.user);
+  } else if (test.capture === "createdItem") {
+    lastCreatedId = payload.id;
+  } else if (test.capture === "firstItem") {
+    lastListedId = payload[0]?.id ?? null;
+  }
+}
+
+function setSessionBadge(loggedIn) {
+  const badge = $("#session");
+  badge.className = "badge " + (loggedIn ? "up" : "down");
+  badge.textContent = loggedIn ? "已登录" : "未登录";
+}
+
+function showWho(user) {
+  $("#who").textContent = user ? `当前账号：${user.username}（id ${user.id}）` : "";
+}
+
+function showDetail(node, test, r) {
+  node.detail.textContent = "";
+  node.detail.hidden = false;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = `${r.ms.toFixed(0)} ms · ${r.text.length} B · 期望 ${test.expect}`;
+  const pre = document.createElement("pre");
+  pre.textContent = r.text || "(空响应体)";
+  node.detail.append(meta, pre);
+}
+
+function showResponse(test, r, ok) {
+  $("#which").textContent = `${test.method} ${test.path()}`;
+  const out = $("#out");
+  out.textContent = "";
+
+  const head = document.createElement("div");
+  head.className = "meta";
+  head.style.padding = "12px 14px 0";
+  head.textContent = `${ok ? "✓ 符合预期" : "✗ 与预期不符"} · ${r.status} · ${r.ms.toFixed(0)} ms`;
+
+  const pre = document.createElement("pre");
+  pre.className = "out";
+  pre.textContent = r.text || "(空响应体)";
+
+  out.append(head, pre);
+}
+
+function recount() {
+  let pass = 0, fail = 0;
+  nodes.forEach((n) => {
+    if (n.verdict.classList.contains("pass")) pass++;
+    else if (n.verdict.classList.contains("fail")) fail++;
+  });
+  $("#pass").textContent = pass;
+  $("#fail").textContent = fail;
+}
+
+async function runAll() {
+  const btn = $("#run-all");
+  btn.disabled = true;
+  base.value = base.value.trim().replace(/\/+$/, "") || location.origin;
+  registered = null;
+
+  // Probe the health endpoint first so the header badge reflects reality.
+  try {
+    const r = await send("GET", "/health", undefined);
+    const c = $("#conn");
+    c.className = "badge up";
+    c.textContent = "已连接 · uptime " + (JSON.parse(r.text).uptime_secs ?? "?") + "s";
+  } catch {
+    const c = $("#conn");
+    c.className = "badge down";
+    c.textContent = "连接失败";
+    btn.disabled = false;
+    return;
+  }
+
+  for (let i = 0; i < TESTS.length; i++) {
+    $("#progress").textContent = `${i + 1} / ${TESTS.length}`;
+    await runOne(i);
+  }
+  $("#progress").textContent = "";
+  btn.disabled = false;
+}
+
+// The three buttons in the 账号 panel. Same endpoints the cases use, so the page
+// can be driven by hand as well as in sequence.
+async function authAction(action) {
+  const username = $("#username").value.trim();
+  const password = $("#password").value;
+  const path = action === "register" ? "/api/auth/register"
+    : action === "login" ? "/api/auth/login"
+    : "/api/auth/logout";
+  const body = action === "logout" ? undefined : JSON.stringify({ username, password });
+
+  try {
+    const r = await send("POST", path, body);
+    if (r.status >= 400) {
+      $("#who").textContent = `${r.status}：${safeError(r.text)}`;
+      setSessionBadge(false);
+    } else if (action === "logout") {
+      setSessionBadge(false);
+      showWho(null);
+    } else {
+      setSessionBadge(true);
+      try { showWho(JSON.parse(r.text).user); } catch { /* nothing to show */ }
+    }
+    renderResponse(`POST ${path}`, r);
+  } catch (err) {
+    $("#who").textContent = "请求失败：" + err.message;
+  }
+}
+
+function renderResponse(label, r) {
+  $("#out").textContent = "";
+  const head = document.createElement("div");
+  head.className = "meta";
+  head.style.padding = "12px 14px 0";
+  head.textContent = `${label} · ${r.status} · ${r.ms.toFixed(0)} ms`;
+  const pre = document.createElement("pre");
+  pre.className = "out";
+  pre.textContent = r.text || "(空响应体)";
+  $("#out").append(head, pre);
+}
+
+function safeError(text) {
+  try { return JSON.parse(text).error ?? text; } catch { return text; }
+}
+
+$("#do-register").addEventListener("click", () => authAction("register"));
+$("#do-login").addEventListener("click", () => authAction("login"));
+$("#do-logout").addEventListener("click", () => authAction("logout"));
+
+$("#copy-curl").addEventListener("click", async () => {
+  if (!lastRequest) return;
+  const origin = base.value.replace(/\/+$/, "");
+  let cmd = `curl -i -X ${lastRequest.method} '${origin}${lastRequest.path}'`;
+  if (lastRequest.body !== undefined) {
+    cmd += ` -H 'content-type: application/json' -d '${lastRequest.body}'`;
+  }
+  // Copying a login curl is useless without the cookie it hands back.
+  if (lastRequest.path.startsWith("/api/auth/login")) {
+    cmd += `\n# 登录后带上返回的 Cookie：curl -i '${origin}/api/auth/me' -H 'cookie: session=<令牌>'`;
+  }
+  try {
+    await navigator.clipboard.writeText(cmd);
+    $("#which").textContent = "已复制 curl 到剪贴板";
+  } catch {
+    $("#which").textContent = cmd;
+  }
+});
+
+$("#reset").addEventListener("click", () => {
+  lastCreatedId = null;
+  registered = null;
+  render();
+  recount();
+  setSessionBadge(false);
+  showWho(null);
+  $("#out").textContent = "";
+  $("#out").append(Object.assign(document.createElement("div"), {
+    className: "empty",
+    textContent: "还没有响应。点「运行全部」或单独运行某个用例。",
+  }));
+  $("#which").textContent = "选择左侧任意用例查看";
+  $("#progress").textContent = "";
+});
+
+render();
+$("#run-all").addEventListener("click", runAll);
+</script>
+</body>
+</html>

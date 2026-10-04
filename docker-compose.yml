@@ -1,0 +1,39 @@
+services:
+  http-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rust-http-server:local
+    container_name: rust-http-server
+    ports:
+      # host:container — the server listens on 3000 inside the container.
+      - "8080:3000"
+    environment:
+      HOST: 0.0.0.0
+      PORT: "3000"
+      RUST_LOG: "info,tower_http=info"
+      # Matches the image default, but spelled out so it is obvious which mount
+      # the database belongs to.
+      DATABASE_PATH: /data/app.db
+      # 24h. Shorten it if idle sessions should die faster.
+      SESSION_TTL_SECS: "86400"
+      # false is right for plain http://localhost. Set to "true" behind an https
+      # proxy, otherwise the browser drops the session cookie.
+      COOKIE_SECURE: "false"
+    volumes:
+      # Without this the database lives and dies with the container, which would
+      # undo the whole point of moving off in-memory storage.
+      - http-server-data:/data
+    restart: unless-stopped
+    # Must exceed the app's own SHUTDOWN_GRACE so Docker's SIGTERM is not
+    # escalated to SIGKILL while requests are still draining.
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  http-server-data:
